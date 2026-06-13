@@ -15,13 +15,13 @@ mattiatrapani.com  domain  2026-07-02   19d  13.20 EUR  yes
 ## Install
 
 ```bash
-npm install -g @16bitsrl/gidinet
+npm install -g @16bit/gidinet
 ```
 
 Or run it without installing:
 
 ```bash
-npx @16bitsrl/gidinet domains
+npx @16bit/gidinet domains
 ```
 
 Requires Node.js 20 or newer.

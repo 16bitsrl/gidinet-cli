@@ -32,7 +32,7 @@ const program = new Command();
 program
   .name("gidinet")
   .description("Modern CLI for GiDiNet / QuickServiceBox — domains, DNS, contacts and renewals.")
-  .version("0.1.0")
+  .version("0.1.1")
   .option("--json", "output raw JSON instead of tables")
   .option("-u, --username <username>", "reseller account username (overrides env/config)")
   .option("-p, --password <password>", "reseller account password (overrides env/config)")

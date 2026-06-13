@@ -1,6 +1,6 @@
 {
-  "name": "@16bitsrl/gidinet",
-  "version": "0.1.0",
+  "name": "@16bit/gidinet",
+  "version": "0.1.1",
   "description": "Modern, simple CLI for GiDiNet / QuickServiceBox — domains, DNS, contacts and renewals from your terminal.",
   "keywords": [
     "gidinet",
