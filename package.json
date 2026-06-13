@@ -1,0 +1,45 @@
+{
+  "name": "@16bitsrl/gidinet",
+  "version": "0.1.0",
+  "description": "Modern, simple CLI for GiDiNet / QuickServiceBox — domains, DNS, contacts and renewals from your terminal.",
+  "keywords": [
+    "gidinet",
+    "quickservicebox",
+    "domains",
+    "dns",
+    "cli",
+    "registrar"
+  ],
+  "homepage": "https://github.com/16bitsrl/gidinet-cli#readme",
+  "bugs": "https://github.com/16bitsrl/gidinet-cli/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/16bitsrl/gidinet-cli.git"
+  },
+  "license": "MIT",
+  "author": "16bit Srl",
+  "type": "module",
+  "bin": {
+    "gidinet": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "node --experimental-strip-types src/cli.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "commander": "^14.0.0",
+    "fast-xml-parser": "^5.2.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
