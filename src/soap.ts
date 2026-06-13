@@ -91,7 +91,9 @@ export async function soapCall(
     `</soap:Envelope>`;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), (opts.timeout ?? 30) * 1000);
+  // Most calls return in well under a second, but a nameserver change can take
+  // ~30s on the registry side, so the default ceiling is generous.
+  const timer = setTimeout(() => controller.abort(), (opts.timeout ?? 60) * 1000);
 
   let res: Response;
   try {

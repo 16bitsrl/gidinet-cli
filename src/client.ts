@@ -165,10 +165,11 @@ export class GidinetClient {
   /** Replace the authoritative nameservers for a domain. */
   async changeNameservers(fqdn: string, nameservers: string[]): Promise<void> {
     const clean = nameservers.map((n) => n.trim()).filter(Boolean);
+    // The API expects a comma-separated list (note: domainGetList returns
+    // nameservers semicolon-separated — the two directions differ).
     await this.core("domainNameServersChange", {
       domain: fqdn,
-      nameservers: clean.join(";"),
-      additionalParameters: { string: [] },
+      nameservers: clean.join(","),
     });
   }
 
