@@ -1,9 +1,17 @@
 #!/usr/bin/env node
 import { Command, Option } from "commander";
 import pc from "picocolors";
-import { GidinetClient, DNS_RECORD_TYPES, type DnsRecord } from "./client.js";
+import { GidinetClient, DNS_RECORD_TYPES, type DnsRecord, type DomainDetail } from "./client.js";
 import { GidinetError } from "./soap.js";
-import { resolveCredentials, saveCredentials, clearCredentials, configPath } from "./config.js";
+import {
+  resolveCredentials,
+  saveAccount,
+  removeAccount,
+  setCurrentAccount,
+  listAccounts,
+  configPath,
+  type ResolvedCredentials,
+} from "./config.js";
 import { prompt, promptHidden, confirm, isInteractive } from "./prompt.js";
 import {
   table,
@@ -28,25 +36,35 @@ program
   .option("--json", "output raw JSON instead of tables")
   .option("-u, --username <username>", "reseller account username (overrides env/config)")
   .option("-p, --password <password>", "reseller account password (overrides env/config)")
+  .option("-a, --account <name>", "use a specific saved account")
   .option("--no-color", "disable coloured output");
 
 interface GlobalOpts {
   json?: boolean;
   username?: string;
   password?: string;
+  account?: string;
   color?: boolean;
 }
 
-/** Build an authenticated client or exit with a helpful message. */
-function client(cmd: Command): GidinetClient {
-  const opts = cmd.optsWithGlobals() as GlobalOpts;
+/** Resolve credentials from flags/env/config, or exit with a helpful message. */
+function resolveOrExit(opts: GlobalOpts): ResolvedCredentials {
   if (opts.color === false) (pc as any).isColorSupported = false;
-  const creds = resolveCredentials(opts);
+  const creds = resolveCredentials(opts, opts.account);
+  if (typeof creds === "string") {
+    errorOut(creds);
+    process.exit(1);
+  }
   if (!creds) {
     errorOut("No credentials found. Run `gidinet login`, set GIDINET_USERNAME / GIDINET_PASSWORD, or pass -u/-p.");
     process.exit(1);
   }
-  return new GidinetClient(creds);
+  return creds;
+}
+
+/** Build an authenticated client or exit with a helpful message. */
+function client(cmd: Command): GidinetClient {
+  return new GidinetClient(resolveOrExit(cmd.optsWithGlobals() as GlobalOpts));
 }
 
 function wantsJson(cmd: Command): boolean {
@@ -75,9 +93,11 @@ function run(action: (...args: any[]) => Promise<void>) {
 program
   .command("login")
   .description("save reseller credentials to the local config file")
+  .option("--name <name>", "store under this account name", "default")
   .action(
-    run(async (_o: unknown, cmd: Command) => {
+    run(async (o: any, cmd: Command) => {
       const opts = cmd.optsWithGlobals() as GlobalOpts;
+      const name = opts.account || o.name || "default";
       const username = opts.username || (await prompt("Username: "));
       const password = opts.password || (await promptHidden("Password: "));
       if (!username || !password) {
@@ -87,17 +107,21 @@ program
       process.stdout.write(dim("Verifying… "));
       await new GidinetClient({ username, password }).contacts();
       process.stdout.write(pc.green("ok\n"));
-      const path = saveCredentials({ username, password });
-      print(ok(`Credentials saved to ${dim(path)}`));
+      const path = saveAccount(name, { username, password }, true);
+      print(ok(`Account ${pc.bold(name)} saved and selected ${dim(`(${path})`)}`));
     }),
   );
 
 program
   .command("logout")
-  .description("remove the saved credentials")
+  .description("remove a saved account (the current one by default)")
   .action(
-    run(async () => {
-      print(clearCredentials() ? ok("Credentials removed.") : warn("No saved credentials."));
+    run(async (_o: unknown, cmd: Command) => {
+      const opts = cmd.optsWithGlobals() as GlobalOpts;
+      const accounts = listAccounts();
+      const name = opts.account || accounts.find((a) => a.current)?.name;
+      if (!name) return print(warn("No saved accounts."));
+      print(removeAccount(name) ? ok(`Account ${pc.bold(name)} removed.`) : warn(`No account named ${pc.bold(name)}.`));
     }),
   );
 
@@ -106,20 +130,55 @@ program
   .description("show the active account and where credentials come from")
   .action(
     run(async (_o: unknown, cmd: Command) => {
-      const opts = cmd.optsWithGlobals() as GlobalOpts;
-      const creds = resolveCredentials(opts);
-      if (!creds) {
-        errorOut("Not logged in.");
+      const creds = resolveOrExit(cmd.optsWithGlobals() as GlobalOpts);
+      if (wantsJson(cmd)) return json({ username: creds.username, source: creds.source, configPath: configPath() });
+      print(`${pc.bold(creds.username)} ${dim(`(via ${creds.source})`)}`);
+      print(dim(`config: ${configPath()}`));
+    }),
+  );
+
+// ---- accounts -------------------------------------------------------------
+
+const accounts = program.command("accounts").description("manage saved accounts");
+
+accounts
+  .command("list", { isDefault: true })
+  .alias("ls")
+  .description("list saved accounts")
+  .action(
+    run(async (_o: unknown, cmd: Command) => {
+      const rows = listAccounts();
+      if (wantsJson(cmd)) return json(rows);
+      if (rows.length === 0) return print(dim("No saved accounts. Run `gidinet login`."));
+      for (const a of rows) {
+        const marker = a.current ? pc.green("● ") : "  ";
+        print(`${marker}${pc.bold(a.name)} ${dim(a.username)}`);
+      }
+    }),
+  );
+
+accounts
+  .command("use")
+  .argument("<name>", "the account to make current")
+  .description("switch the current account")
+  .action(
+    run(async (name: string) => {
+      if (!setCurrentAccount(name)) {
+        errorOut(`Account "${name}" not found. See \`gidinet accounts\`.`);
         process.exit(1);
       }
-      const source = opts.username
-        ? "flag"
-        : process.env.GIDINET_USERNAME
-          ? "environment"
-          : "config file";
-      if (wantsJson(cmd)) return json({ username: creds.username, source, configPath: configPath() });
-      print(`${pc.bold(creds.username)} ${dim(`(via ${source})`)}`);
-      print(dim(`config: ${configPath()}`));
+      print(ok(`Now using ${pc.bold(name)}.`));
+    }),
+  );
+
+accounts
+  .command("remove")
+  .alias("rm")
+  .argument("<name>", "the account to remove")
+  .description("remove a saved account")
+  .action(
+    run(async (name: string) => {
+      print(removeAccount(name) ? ok(`Account ${pc.bold(name)} removed.`) : warn(`No account named ${pc.bold(name)}.`));
     }),
   );
 
@@ -174,6 +233,38 @@ program
       ];
       print(table(items, columns));
       if (meta) print("\n" + meta);
+    }),
+  );
+
+// ---- domain detail --------------------------------------------------------
+
+program
+  .command("domain")
+  .alias("info")
+  .argument("<domain>", "the domain, e.g. example.com")
+  .description("show full detail for a single domain (status, dates, contacts)")
+  .action(
+    run(async (domain: string, _o: unknown, cmd: Command) => {
+      const detail = await client(cmd).domainDetail(domain);
+      if (wantsJson(cmd)) return json(detail);
+
+      const contact = (c: DomainDetail["registrant"]) =>
+        c ? `${c.name ?? dim("(unknown)")} ${dim(`#${c.id}`)}` : dim("—");
+      const rows: [string, string][] = [
+        ["Domain", pc.bold(detail.fqdn)],
+        ["Status", detail.status || dim("—")],
+        ["Created", shortDate(detail.createdAt)],
+        ["Updated", shortDate(detail.updatedAt)],
+        ["Expires", shortDate(detail.expiresAt)],
+        ["Nameservers", detail.nameservers.join(", ") || dim("—")],
+        ["Custom NS", detail.hasCustomNameservers ? "yes" : "no"],
+        ["Registrant", contact(detail.registrant)],
+        ["Admin", contact(detail.admin)],
+        ["Tech", contact(detail.tech)],
+        ["Billing", contact(detail.billing)],
+      ];
+      const width = Math.max(...rows.map(([k]) => k.length));
+      for (const [k, v] of rows) print(`${pc.cyan(k.padEnd(width))}  ${v}`);
     }),
   );
 

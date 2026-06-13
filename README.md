@@ -44,6 +44,25 @@ gidinet login          # prompts for username + password, verifies, saves them
 Credentials are stored at `~/.config/gidinet/config.json` with `0600`
 permissions. Remove them with `gidinet logout`.
 
+### Multiple accounts
+
+If you manage more than one reseller account, save each under a name and switch
+between them:
+
+```bash
+gidinet login --name personal     # saves and selects "personal"
+gidinet login --name work         # saves and selects "work"
+
+gidinet accounts                  # list them (● marks the current one)
+gidinet accounts use personal     # switch the default account
+gidinet accounts rm work          # forget one
+
+gidinet -a work domains           # run a single command against "work"
+```
+
+`-a/--account` picks a saved account for one command without changing the
+current one.
+
 ## Commands
 
 | Command | Description |
@@ -53,8 +72,10 @@ permissions. Remove them with `gidinet logout`.
 | `gidinet whoami` | Show the active account and credential source |
 | `gidinet check <domains...>` | Check domain availability (read-only, no charge) |
 | `gidinet domains` | List the domains on the account |
+| `gidinet domain <domain>` | Show full detail for one domain (status, dates, contacts) |
 | `gidinet expiring` | List services approaching expiry, soonest first |
 | `gidinet contacts` | List the contacts (anagrafiche) on the account |
+| `gidinet accounts` | List, switch (`use`) and remove (`rm`) saved accounts |
 | `gidinet ns <domain> <ns...>` | Replace a domain's authoritative nameservers |
 | `gidinet dns list <domain>` | List DNS records |
 | `gidinet dns add <domain> <type> <host> <data>` | Add a DNS record |

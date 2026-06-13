@@ -31,6 +31,27 @@ export interface DomainCheckResult {
   code: number;
 }
 
+export interface DomainContact {
+  id: number;
+  name: string | null;
+}
+
+export interface DomainDetail {
+  fqdn: string;
+  id: number;
+  status: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  expiresAt: string | null;
+  nameservers: string[];
+  hasCustomNameservers: boolean;
+  serviceType: number;
+  registrant: DomainContact | null;
+  admin: DomainContact | null;
+  tech: DomainContact | null;
+  billing: DomainContact | null;
+}
+
 export interface DnsRecord {
   domain: string;
   hostName: string;
@@ -160,6 +181,39 @@ export class GidinetClient {
   /** Raw master data for a single domain. */
   async domainInfo(fqdn: string): Promise<any> {
     return this.core("domainInfo", { domain: fqdn });
+  }
+
+  /**
+   * Structured detail for a single domain, with contact IDs resolved to names
+   * (best-effort — falls back to the bare ID if the lookup fails).
+   */
+  async domainDetail(fqdn: string): Promise<DomainDetail> {
+    const info = await this.domainInfo(fqdn);
+
+    let names = new Map<number, string>();
+    try {
+      for (const c of await this.contacts()) names.set(c.id, c.displayName);
+    } catch {
+      names = new Map();
+    }
+    const contact = (id: number): DomainContact | null =>
+      id > 0 ? { id, name: names.get(id) ?? null } : null;
+
+    return {
+      fqdn: `${str(info.domainName)}.${str(info.domainExtension)}`,
+      id: num(info.domainId),
+      status: str(listOf(info.status?.string).join(", ") || info.status?.string),
+      createdAt: info.crDateUtc ? str(info.crDateUtc) : null,
+      updatedAt: info.upDateUtc ? str(info.upDateUtc) : null,
+      expiresAt: info.exDateUtc ? str(info.exDateUtc) : null,
+      nameservers: listOf(info.nameservers?.string).map(String),
+      hasCustomNameservers: bool(info.hasCustomNameservers),
+      serviceType: num(info.serviceType),
+      registrant: contact(num(info.registrantContactId)),
+      admin: contact(num(info.adminContactId)),
+      tech: contact(num(info.techContactId)),
+      billing: contact(num(info.billingContactId)),
+    };
   }
 
   /** Replace the authoritative nameservers for a domain. */
